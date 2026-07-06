@@ -1,0 +1,6 @@
+{
+  "git.ignoredRepositories": [
+    "FSC-inference-MAPSO",
+    "tinyRNN"
+  ]
+}

@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .DS_Store
+.claude/
 
 # Vendored repos, cloned by the notebook's own Section 0 -- re-clonable, not ours to version
 FSC-inference-MAPSO/
