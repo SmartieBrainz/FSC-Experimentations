@@ -70,20 +70,20 @@ choice, `observations ∈ {0,1}` is the **trial outcome** (1 = win). It's exact 
   RNN: `HIDDEN_DIM_CANDIDATES`, `outer_splits`/`inner_splits`/`seed_num`, `max_epoch_num`,
   `early_stop_counter`. The FSC and RNN size ranges are kept equal so the §3.5 overlay lines
   up 1:1.
-- **RNN training speed.** The upstream library deliberately forces `n_jobs=1` for RNNs
-  (`agent_pool_auto_train` overrides whatever you pass), so §3.2 is single-process and slow.
-  The fits are independent across `hidden_dim`, so run one process per size instead:
+- **RNN fits are archived, not just cached.** tinyRNN writes fits under `tinyRNN/files/saved_model/`, which is inside the git-ignored clone. §3.2 mirrors them to `fitted_models/<dataset>/rnn/` (committed) and restores from there when the live cache is missing — so a fresh clone does not repeat the sweep.
+- **RNN training speed — already handled, nothing to run by hand.** The upstream library
+  forces `n_jobs=1` for RNNs (`agent_pool_auto_train` overrides whatever you pass), so the
+  library call alone is single-process. The fits are independent across `hidden_dim`, so §3.2
+  farms them out to one OS process per size via `scripts/train_rnn_parallel.py` and *then*
+  calls the library, which finds everything finished and skips. Executing the notebook top to
+  bottom already gets you this (~8x on a 10-core Mac). `PARALLEL_TRAIN = False` restores the
+  single-process path.
 
-  ```bash
-  # after the notebook has run §3.1 (which writes the training file + a dataset stamp)
-  python scripts/train_rnn_parallel.py --dataset det_init
-  ```
-
-  Same configs, same output folders — §3.2 then finds the finished fits and skips. Roughly
-  8x wall-clock on a 10-core Mac. It's resumable (finished configs are skipped) and it
-  refuses to run if the training file on disk belongs to a different `DATASET` than the one
-  you named, because `behavior_train.pkl` has one fixed name and is overwritten on every
-  dataset switch.
+  The script is also runnable standalone (`python scripts/train_rnn_parallel.py --dataset
+  det_init`) — it's resumable, and it refuses to run if `behavior_train.pkl` belongs to a
+  different `DATASET` than the one named (that file has one fixed name and is rewritten on
+  every dataset switch, so this would otherwise silently train the wrong data into the right
+  folder). §3.1 writes the stamp that makes the check possible.
 - **Don't reach for the GPU.** The models are tiny (`hidden_dim ≤ 8`, `input_dim` 4), so MPS
   is *measurably slower* than CPU (~1.4x on an M-series Mac) — per-step kernel-launch overhead
   swamps a 4×4 matmul. tinyRNN also runs the network in float64 (`RNNAgent` calls `.double()`),
@@ -110,7 +110,9 @@ choice, `observations ∈ {0,1}` is the **trial outcome** (1 = win). It's exact 
 ```
 fsc_tinyrnn_pipeline.ipynb      the whole pipeline
 wsls_actions_observations.npz   the current dataset
-fitted_models/fsc/              cached FSC fits (M-sweep + selected model)
-fitted_models/rnn/              cached RNN nested-CV run (all sizes / folds / seeds)
+fitted_models/<dataset>/fsc/     committed FSC fits (M-sweep + selected model)
+fitted_models/<dataset>/rnn/     committed RNN nested-CV run (all sizes / folds / seeds);
+                                 §3.2 restores this into tinyRNN/files/saved_model/ on a
+                                 fresh clone, so the sweep is not repeated
 FSC-inference-MAPSO/  tinyRNN/   cloned by §0 (git-ignored, not committed)
 ```
