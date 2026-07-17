@@ -70,10 +70,24 @@ choice, `observations ∈ {0,1}` is the **trial outcome** (1 = win). It's exact 
   RNN: `HIDDEN_DIM_CANDIDATES`, `outer_splits`/`inner_splits`/`seed_num`, `max_epoch_num`,
   `early_stop_counter`. The FSC and RNN size ranges are kept equal so the §3.5 overlay lines
   up 1:1.
-- **RNN training speed.** The upstream library deliberately forces `n_jobs=1` for RNNs, so
-  the sweep cell is effectively single-process and slow. The shipped RNN fits were produced
-  by running one process per `hidden_dim` in parallel — equivalent (each fit is independent),
-  just faster. Reach for that if you widen the sweep.
+- **RNN training speed.** The upstream library deliberately forces `n_jobs=1` for RNNs
+  (`agent_pool_auto_train` overrides whatever you pass), so §3.2 is single-process and slow.
+  The fits are independent across `hidden_dim`, so run one process per size instead:
+
+  ```bash
+  # after the notebook has run §3.1 (which writes the training file + a dataset stamp)
+  python scripts/train_rnn_parallel.py --dataset det_init
+  ```
+
+  Same configs, same output folders — §3.2 then finds the finished fits and skips. Roughly
+  8x wall-clock on a 10-core Mac. It's resumable (finished configs are skipped) and it
+  refuses to run if the training file on disk belongs to a different `DATASET` than the one
+  you named, because `behavior_train.pkl` has one fixed name and is overwritten on every
+  dataset switch.
+- **Don't reach for the GPU.** The models are tiny (`hidden_dim ≤ 8`, `input_dim` 4), so MPS
+  is *measurably slower* than CPU (~1.4x on an M-series Mac) — per-step kernel-launch overhead
+  swamps a 4×4 matmul. tinyRNN also runs the network in float64 (`RNNAgent` calls `.double()`),
+  which Apple's MPS backend cannot do at all. Parallel CPU processes are the real speedup.
 
 ## Things worth knowing before you build on the numbers
 
