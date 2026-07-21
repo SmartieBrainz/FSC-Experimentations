@@ -42,9 +42,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TINYRNN_ROOT = REPO_ROOT / "tinyRNN"
 DATA_REL = "files/SimpleDatasetInput/behavior_train.pkl"   # written by the notebook's §3.1
 DEFAULT_DIMS = [1, 2, 3, 4, 5, 6, 7, 8]                    # keep in sync with HIDDEN_DIM_CANDIDATES
+L1_BASELINE = 1e-5                                         # keep in sync with the notebook's L1_WEIGHT default
 
 
-def build_config(dataset, hidden_dim, A, Y):
+def exp_folder_for(dataset, l1):
+    """The experiment folder for one (dataset, l1_weight). MUST match the notebook's §3.2 logic.
+
+    The baseline l1 keeps the historical name exp_<dataset>, so the committed fits under
+    fitted_models/<dataset>/rnn/exp_<dataset>/ are still found and reused. Any OTHER l1 gets its
+    own folder exp_<dataset>_l1-<l1>, so fits at different l1 never share a folder or an archive
+    -- you can keep several l1 values side by side and select between them (notebook §3.3)."""
+    base = f"exp_{dataset}"
+    return base if l1 == L1_BASELINE else f"{base}_l1-{l1:g}"
+
+
+def build_config(dataset, hidden_dim, A, Y, l1):
     """Mirror the notebook's §3.2 `base_config` EXACTLY.
 
     This has to match field-for-field: the model's folder name is derived from the config, so
@@ -63,15 +75,15 @@ def build_config(dataset, hidden_dim, A, Y):
         "agent_type": "RNN", "rnn_type": "GRU", "input_dim": A + Y,
         "hidden_dim": hidden_dim, "output_dim": A, "device": "cpu",
         "output_h0": True, "trainable_h0": False, "readout_FC": True, "one_hot": False,
-        "lr": 0.005, "l1_weight": 1e-5, "weight_decay": 0, "penalized_weight": "rec",
+        "lr": 0.005, "l1_weight": l1, "weight_decay": 0, "penalized_weight": "rec",
         "max_epoch_num": 2000, "early_stop_counter": 200,
         "outer_splits": 5, "inner_splits": 4, "seed_num": 2,
         "save_model_pass": "minimal", "training_diagnose": None,
-        "exp_folder": f"exp_{dataset}",
+        "exp_folder": exp_folder_for(dataset, l1),
     }
 
 
-def worker(dataset, hidden_dim):
+def worker(dataset, hidden_dim, l1):
     """Train every fold/seed at ONE hidden_dim. Runs inside tinyRNN/ as its own process."""
     os.chdir(TINYRNN_ROOT)
     sys.path.insert(0, str(TINYRNN_ROOT))
@@ -90,23 +102,26 @@ def worker(dataset, hidden_dim):
     A = int(max(np.max(a) for a in data["action"])) + 1
     Y = int(max(np.max(o) for o in data["observation"])) + 1
 
-    base_config = build_config(dataset, hidden_dim, A, Y)
+    base_config = build_config(dataset, hidden_dim, A, Y, l1)
     config_ranges = {"rnn_type": ["GRU"], "hidden_dim": [hidden_dim],
-                     "readout_FC": [True], "l1_weight": [1e-5]}
+                     "readout_FC": [True], "l1_weight": [l1]}
     behavior_cv_training_config_combination(base_config, config_ranges, n_jobs=1, verbose_level=1)
-    print(f"DONE dataset={dataset} hidden_dim={hidden_dim}")
+    print(f"DONE dataset={dataset} hidden_dim={hidden_dim} l1={l1:g}")
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dataset", required=True, help='e.g. "random_init" or "det_init" -- must match §1.1a')
     p.add_argument("--dims", type=int, nargs="+", default=DEFAULT_DIMS)
+    p.add_argument("--l1", type=float, default=L1_BASELINE,
+                   help=f"L1 penalty on the recurrent weights (default {L1_BASELINE:g}). Must match the "
+                        f"notebook's L1_WEIGHT. A non-baseline value trains into its own exp_<dataset>_l1-<l1> folder.")
     p.add_argument("--jobs", type=int, default=None, help="default: one per dim, capped at cores-2")
     p.add_argument("--_worker", type=int, default=None, help=argparse.SUPPRESS)
     args = p.parse_args()
 
     if args._worker is not None:
-        return worker(args.dataset, args._worker)
+        return worker(args.dataset, args._worker, args.l1)
 
     data_file = TINYRNN_ROOT / DATA_REL
     if not data_file.exists():
@@ -133,15 +148,17 @@ def main():
                  f'exp_{args.dataset}/ and the results would be silently wrong.)')
 
     jobs = args.jobs or min(len(args.dims), max(1, (os.cpu_count() or 4) - 2))
-    print(f"dataset={args.dataset}  dims={args.dims}  -> {jobs} parallel processes "
-          f"({os.cpu_count()} cores)\nAlready-finished configs are skipped automatically.\n")
+    print(f"dataset={args.dataset}  dims={args.dims}  l1={args.l1:g}  -> {jobs} parallel processes "
+          f"({os.cpu_count()} cores)\nTraining into {exp_folder_for(args.dataset, args.l1)}/. "
+          f"Already-finished configs are skipped automatically.\n")
 
     running, failed = [], []
     queue = list(args.dims)
     while queue or running:
         while queue and len(running) < jobs:
             d = queue.pop(0)
-            cmd = [sys.executable, __file__, "--dataset", args.dataset, "--_worker", str(d)]
+            cmd = [sys.executable, __file__, "--dataset", args.dataset,
+                   "--l1", repr(args.l1), "--_worker", str(d)]
             log = open(REPO_ROOT / f"train_{args.dataset}_h{d}.log", "w")
             print(f"  launch hidden_dim={d}  (log: train_{args.dataset}_h{d}.log)")
             running.append((d, subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT), log))
