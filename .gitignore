@@ -10,3 +10,7 @@ tinyRNN/
 
 # Per-run logs from scripts/train_rnn_parallel.py
 train_*.log
+
+# FSC val/test loss sidecars (§2.1) -- a local cache regenerated in seconds from the
+# committed .pkl fits + the current split, so not worth versioning.
+fitted_models/**/fsc/**/*.losses.json
