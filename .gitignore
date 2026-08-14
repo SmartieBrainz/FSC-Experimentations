@@ -15,3 +15,10 @@ train_*.log
 # committed .pkl fits + the current split, so not worth versioning.
 fitted_models/**/fsc/**/*.losses.json
 fitted_models_ts/**/fsc/**/*.losses.json
+
+# Regenerable RNN-training and investigation outputs, used only by the superseded pipeline
+# notebooks. Re-run training to recreate them; only the FSC fits are versioned.
+fitted_models/*/rnn/exp_*_l1-0/
+fitted_models/ts/rnn/
+fitted_models/*/investigation/
+fitted_models/ts/fsc/sweep/
