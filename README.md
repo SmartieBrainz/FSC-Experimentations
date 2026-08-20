@@ -37,7 +37,10 @@ from the committed fits, so every figure regenerates in seconds without retraini
    off-manifold probe flat, so the drift is about how training arrives at weights, not the
    architecture. Two results carry it: a single hidden unit reproduces a three-state machine's
    behavior, and the correct correspondence between the two memories is an affine map that exists
-   exactly when the hidden size is at least the number of states minus one.
+   exactly when the hidden size is at least the number of states minus one. This notebook also lays
+   out the mathematics of the solve step by step, and gathers the whole L1 regularizer story in one
+   place: the penalty buys fewer effective dimensions and a more decisive size pick, and pays for it
+   with a slightly worse fit and worse off-manifold behavior.
 
 ## Running them
 
@@ -75,8 +78,9 @@ from `experiments/` or from the repository root.
 - `fsc_rnn_wsls_paper.ipynb` and `fsc_rnn_wsls_paper_ts.ipynb`: a cleaned rewrite of the pipeline
   that trains without the L1 penalty, with the representable-versus-reachable study.
 
-Sections 11 to 13 of Finding 1 (the `det_init` dataset and the four-dataset determinism spectrum)
-extend the analysis to a teammate's later datasets.
+Sections 11 and 12 of Finding 1 (the `det_init` dataset and the four-dataset determinism spectrum)
+extend the analysis to a teammate's later datasets. The L1 regularizer comparison they motivated now
+sits with the rest of the L1 story in Finding 3.
 
 ## The data
 
